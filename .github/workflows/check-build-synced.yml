@@ -1,0 +1,31 @@
+name: Check dist/index.js is up to date
+on:
+  pull_request:
+    paths:
+      - 'index.js'
+      - 'package.json'
+      - 'package-lock.json'
+jobs:
+  check-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install
+      - name: Run build
+        run: npm run build
+      - name: Check if dist/index.js changed
+        run: |
+          if [[ -n $(git status --porcelain dist/index.js) ]]; then
+            echo "❌ dist/index.js is not up to date with index.js"
+            echo "Please run: npm run build"
+            git diff dist/index.js
+            exit 1
+          else
+            echo "✅ dist/index.js is up to date"
+          fi
