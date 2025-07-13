@@ -1,0 +1,10 @@
+{
+  "name": "ai-code-review-action",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@actions/core": "^1.10.0",
+    "@actions/github": "^5.0.0",
+    "axios": "^1.6.0"
+  }
+}

@@ -1,0 +1,10 @@
+name: 'AI Code Review'
+description: 'Post OpenAI-generated review comments on PR diff'
+author: 'ucan-lab'
+inputs:
+  openai_api_key:
+    description: 'OpenAI API Key'
+    required: true
+runs:
+  using: 'node20'
+  main: 'index.js'
