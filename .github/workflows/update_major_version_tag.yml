@@ -3,6 +3,8 @@ on:
   push:
     tags:
       - 'v*.*.*'
+permissions:
+  contents: write
 jobs:
   update-major-tag:
     runs-on: ubuntu-latest
