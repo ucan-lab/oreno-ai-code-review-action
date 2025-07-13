@@ -40357,7 +40357,7 @@ var __webpack_exports__ = {};
 const core = __nccwpck_require__(7484);
 const github = __nccwpck_require__(3228);
 const axios = __nccwpck_require__(7269);
-const axiosRetry = __nccwpck_require__(750);
+const axiosRetry = (__nccwpck_require__(750)["default"]);
 const exec = (__nccwpck_require__(5317).execSync);
 
 (async () => {
