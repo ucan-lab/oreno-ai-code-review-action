@@ -1,0 +1,35 @@
+name: Update Major Version Tag
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+jobs:
+  update-major-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract major version from pushed tag
+        id: extract
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          echo "Full tag: $TAG_NAME"
+
+          # Extract major version, e.g. v1 from v1.2.3
+          MAJOR_TAG=$(echo "$TAG_NAME" | grep -oE '^v[0-9]+')
+          echo "MAJOR_TAG=$MAJOR_TAG" >> $GITHUB_ENV
+          echo "major=$MAJOR_TAG" >> $GITHUB_OUTPUT
+      - name: Get latest tag for that major version
+        id: latest
+        run: |
+          LATEST=$(git tag -l "${{ steps.extract.outputs.major }}.*" --sort=-v:refname | head -n 1)
+          echo "Latest for major: $LATEST"
+          echo "latest_tag=$LATEST" >> $GITHUB_OUTPUT
+      - name: Update moving major tag (e.g. v1 → v1.2.3)
+        run: |
+          git tag -f ${{ steps.extract.outputs.major }} ${{ steps.latest.outputs.latest_tag }}
+          git push origin ${{ steps.extract.outputs.major }} --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
