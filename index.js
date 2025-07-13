@@ -71,6 +71,20 @@ ${diff.slice(0, 3500)}
 
     console.log('レビュー投稿完了');
   } catch (err) {
+    if (err.isAxiosError) {
+      core.error(`Axiosエラー: ${err.message}`);
+      if (err.response) {
+        core.error(`status: ${err.response.status}`);
+        core.error(`statusText: ${err.response.statusText}`);
+        core.error(`response data: ${JSON.stringify(err.response.data)}`);
+        core.error(`response headers: ${JSON.stringify(err.response.headers)}`);
+      }
+      core.error(`config: ${JSON.stringify(err.config)}`);
+      core.error(`stack: ${err.stack}`);
+    } else {
+      core.error(`一般エラー: ${err.message}`);
+      core.error(`stack: ${err.stack}`);
+    }
     core.setFailed(`エラー: ${err.message}`);
   }
 })();
