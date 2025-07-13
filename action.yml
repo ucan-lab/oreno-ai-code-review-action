@@ -5,6 +5,9 @@ inputs:
   openai_api_key:
     description: 'OpenAI API Key'
     required: true
+  prompt_file:
+    description: 'カスタムプロンプトファイルのパス'
+    required: false
 runs:
   using: 'node20'
   main: 'dist/index.js'
