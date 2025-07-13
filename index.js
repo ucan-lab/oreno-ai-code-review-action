@@ -1,6 +1,7 @@
 const core = require('@actions/core');
 const github = require('@actions/github');
 const axios = require('axios');
+const axiosRetry = require('axios-retry');
 const exec = require('child_process').execSync;
 
 (async () => {
@@ -19,6 +20,29 @@ const exec = require('child_process').execSync;
 ${diff.slice(0, 3500)}
 --- Diff End ---
 `;
+
+    axiosRetry(axios, {
+      retries: 5,
+      retryCondition: (error) => {
+        return error.response && error.response.status === 429;
+      },
+      retryDelay: (retryCount, error) => {
+        const retryAfter = error.response && error.response.headers['retry-after'];
+        if (retryAfter) {
+          // retry-afterが秒数の場合と日付の場合がある
+          const delay = Number(retryAfter);
+          if (!isNaN(delay)) {
+            return delay * 1000;
+          } else {
+            const date = new Date(retryAfter);
+            const now = new Date();
+            return Math.max(date.getTime() - now.getTime(), 1000);
+          }
+        }
+        // デフォルトは指数バックオフ
+        return axiosRetry.exponentialDelay(retryCount);
+      },
+    });
 
     const res = await axios.post(
       'https://api.openai.com/v1/chat/completions',
