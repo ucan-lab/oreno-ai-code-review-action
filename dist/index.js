@@ -40359,6 +40359,8 @@ const github = __nccwpck_require__(3228);
 const axios = __nccwpck_require__(7269);
 const axiosRetry = (__nccwpck_require__(750)["default"]);
 const exec = (__nccwpck_require__(5317).execSync);
+const fs = __nccwpck_require__(9896);
+const path = __nccwpck_require__(6928);
 
 (async () => {
   try {
@@ -40369,8 +40371,27 @@ const exec = (__nccwpck_require__(5317).execSync);
 
     const diff = exec(`gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`).toString();
 
+    // プロンプトファイルの読み込み
+    const promptFile = core.getInput('prompt_file');
+    let reviewPrompt;
+    if (promptFile) {
+      const promptPath = path.resolve(promptFile);
+      console.info(`指定されたプロンプトファイル: ${promptPath}`);
+      if (!fs.existsSync(promptPath)) {
+        throw new Error(`指定されたプロンプトファイルが存在しません: ${promptPath}`);
+      }
+      reviewPrompt = fs.readFileSync(promptPath, 'utf8');
+    } else {
+      const defaultPromptPath = __nccwpck_require__.ab + "default_prompt.md";
+      console.info(`デフォルトプロンプトファイル: ${defaultPromptPath}`);
+      if (!fs.existsSync(__nccwpck_require__.ab + "default_prompt.md")) {
+        throw new Error(`デフォルトプロンプトファイルが存在しません: ${defaultPromptPath}`);
+      }
+      reviewPrompt = fs.readFileSync(__nccwpck_require__.ab + "default_prompt.md", 'utf8');
+    }
+
     const prompt = `
-次のコードの差分についてレビューしてください。バグ、改善点、可読性に関して指摘してください。
+${reviewPrompt}
 
 --- Diff Start ---
 ${diff.slice(0, 3500)}

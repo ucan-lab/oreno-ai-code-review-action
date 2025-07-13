@@ -3,6 +3,8 @@ const github = require('@actions/github');
 const axios = require('axios');
 const axiosRetry = require('axios-retry').default;
 const exec = require('child_process').execSync;
+const fs = require('fs');
+const path = require('path');
 
 (async () => {
   try {
@@ -13,8 +15,27 @@ const exec = require('child_process').execSync;
 
     const diff = exec(`gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`).toString();
 
+    // プロンプトファイルの読み込み
+    const promptFile = core.getInput('prompt_file');
+    let reviewPrompt;
+    if (promptFile) {
+      const promptPath = path.resolve(promptFile);
+      console.info(`指定されたプロンプトファイル: ${promptPath}`);
+      if (!fs.existsSync(promptPath)) {
+        throw new Error(`指定されたプロンプトファイルが存在しません: ${promptPath}`);
+      }
+      reviewPrompt = fs.readFileSync(promptPath, 'utf8');
+    } else {
+      const defaultPromptPath = path.resolve('default_prompt.md');
+      console.info(`デフォルトプロンプトファイル: ${defaultPromptPath}`);
+      if (!fs.existsSync(defaultPromptPath)) {
+        throw new Error(`デフォルトプロンプトファイルが存在しません: ${defaultPromptPath}`);
+      }
+      reviewPrompt = fs.readFileSync(defaultPromptPath, 'utf8');
+    }
+
     const prompt = `
-次のコードの差分についてレビューしてください。バグ、改善点、可読性に関して指摘してください。
+${reviewPrompt}
 
 --- Diff Start ---
 ${diff.slice(0, 3500)}
