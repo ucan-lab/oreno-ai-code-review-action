@@ -15,7 +15,11 @@ const path = require('path');
 
     if (github.context.payload.pull_request) {
       prNumber = github.context.payload.pull_request.number;
-    } else if (github.context.payload.issue && github.context.payload.issue.pull_request) {
+    } else if (
+      github.context.payload.issue &&
+      github.context.payload.issue.pull_request &&
+      typeof github.context.payload.issue.number === 'number'
+    ) {
       prNumber = github.context.payload.issue.number;
     }
 
