@@ -1,8 +1,8 @@
-name: Check dist/index.js is up to date
+name: Check Build
 on:
   pull_request:
     paths:
-      - 'index.js'
+      - 'index.ts'
       - 'package.json'
       - 'package-lock.json'
 jobs:
@@ -17,12 +17,16 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Run ESLint
+        run: npm run lint
+      - name: Run Prettier check
+        run: npx prettier --check .
       - name: Run build
         run: npm run build
       - name: Check if dist/index.js changed
         run: |
           if [[ -n $(git status --porcelain dist/index.js) ]]; then
-            echo "❌ dist/index.js is not up to date with index.js"
+            echo "❌ dist/index.js is not up to date with index.ts"
             echo "Please run: npm run build"
             git diff dist/index.js
             exit 1
