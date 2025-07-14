@@ -11,7 +11,15 @@ const path = require('path');
     const openaiKey = core.getInput('openai_api_key');
     const token = process.env.GITHUB_TOKEN;
     const repo = github.context.repo;
-    const prNumber = github.context.payload.pull_request.number;
+    let prNumber;
+
+    if (github.context.payload.pull_request) {
+      prNumber = github.context.payload.pull_request.number;
+    } else if (github.context.payload.issue && github.context.payload.issue.pull_request) {
+      prNumber = github.context.payload.issue.number;
+    }
+
+    if (!prNumber) throw new Error('プルリクエスト番号が取得できません');
 
     const diff = exec(`gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`).toString();
 
