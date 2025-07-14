@@ -52,72 +52,66 @@ const axios_retry_1 = __importDefault(require("axios-retry"));
 const child_process_1 = require("child_process");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-(() => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const openaiKey = core.getInput('openai_api_key');
-        const token = process.env.GITHUB_TOKEN;
-        if (!token)
-            throw new Error('GITHUB_TOKENが設定されていません');
-        const repo = github.context.repo;
-        let prNumber;
-        if (github.context.payload.pull_request) {
-            prNumber = github.context.payload.pull_request.number;
+function getPrNumber(context) {
+    if (context.payload.pull_request) {
+        return context.payload.pull_request.number;
+    }
+    else if (context.payload.issue &&
+        context.payload.issue.pull_request &&
+        typeof context.payload.issue.number === 'number') {
+        return context.payload.issue.number;
+    }
+    throw new Error('プルリクエスト番号が取得できません');
+}
+function getDiff(prNumber, repo) {
+    return (0, child_process_1.execSync)(`gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`).toString();
+}
+function getReviewPrompt(promptFile) {
+    if (promptFile) {
+        const promptPath = path.resolve(promptFile);
+        console.info(`指定されたプロンプトファイル: ${promptPath}`);
+        if (!fs.existsSync(promptPath)) {
+            throw new Error(`指定されたプロンプトファイルが存在しません: ${promptPath}`);
         }
-        else if (github.context.payload.issue &&
-            github.context.payload.issue.pull_request &&
-            typeof github.context.payload.issue.number === 'number') {
-            prNumber = github.context.payload.issue.number;
+        return fs.readFileSync(promptPath, 'utf8');
+    }
+    else {
+        const defaultPromptPath = path.resolve('default_prompt.md');
+        console.info(`デフォルトプロンプトファイル: ${defaultPromptPath}`);
+        if (!fs.existsSync(defaultPromptPath)) {
+            throw new Error(`デフォルトプロンプトファイルが存在しません: ${defaultPromptPath}`);
         }
-        if (!prNumber)
-            throw new Error('プルリクエスト番号が取得できません');
-        const diff = (0, child_process_1.execSync)(`gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`).toString();
-        // プロンプトファイルの読み込み
-        const promptFile = core.getInput('prompt_file');
-        let reviewPrompt;
-        if (promptFile) {
-            const promptPath = path.resolve(promptFile);
-            console.info(`指定されたプロンプトファイル: ${promptPath}`);
-            if (!fs.existsSync(promptPath)) {
-                throw new Error(`指定されたプロンプトファイルが存在しません: ${promptPath}`);
-            }
-            reviewPrompt = fs.readFileSync(promptPath, 'utf8');
-        }
-        else {
-            const defaultPromptPath = path.resolve('default_prompt.md');
-            console.info(`デフォルトプロンプトファイル: ${defaultPromptPath}`);
-            if (!fs.existsSync(defaultPromptPath)) {
-                throw new Error(`デフォルトプロンプトファイルが存在しません: ${defaultPromptPath}`);
-            }
-            reviewPrompt = fs.readFileSync(defaultPromptPath, 'utf8');
-        }
-        const prompt = `
-${reviewPrompt}
-
---- Diff Start ---
-${diff.slice(0, 3500)}
---- Diff End ---
-`;
-        (0, axios_retry_1.default)(axios_1.default, {
-            retries: 5,
-            retryCondition: (error) => {
-                return !!(error.response && error.response.status === 429);
-            },
-            retryDelay: (retryCount, error) => {
-                const retryAfter = error.response && error.response.headers['retry-after'];
-                if (retryAfter) {
-                    const delay = Number(retryAfter);
-                    if (!isNaN(delay)) {
-                        return delay * 1000;
-                    }
-                    else {
-                        const date = new Date(retryAfter);
-                        const now = new Date();
-                        return Math.max(date.getTime() - now.getTime(), 1000);
-                    }
+        return fs.readFileSync(defaultPromptPath, 'utf8');
+    }
+}
+function createOpenAIPrompt(reviewPrompt, diff) {
+    return `\n${reviewPrompt}\n\n--- Diff Start ---\n${diff.slice(0, 3500)}\n--- Diff End ---\n`;
+}
+function setupAxiosRetry() {
+    (0, axios_retry_1.default)(axios_1.default, {
+        retries: 5,
+        retryCondition: (error) => {
+            return !!(error.response && error.response.status === 429);
+        },
+        retryDelay: (retryCount, error) => {
+            const retryAfter = error.response && error.response.headers['retry-after'];
+            if (retryAfter) {
+                const delay = Number(retryAfter);
+                if (!isNaN(delay)) {
+                    return delay * 1000;
                 }
-                return axios_retry_1.default.exponentialDelay(retryCount);
-            },
-        });
+                else {
+                    const date = new Date(retryAfter);
+                    const now = new Date();
+                    return Math.max(date.getTime() - now.getTime(), 1000);
+                }
+            }
+            return axios_retry_1.default.exponentialDelay(retryCount);
+        },
+    });
+}
+function requestOpenAIReview(openaiKey, prompt) {
+    return __awaiter(this, void 0, void 0, function* () {
         const res = yield axios_1.default.post('https://api.openai.com/v1/chat/completions', {
             model: 'gpt-3.5-turbo',
             messages: [{ role: 'user', content: prompt }],
@@ -128,7 +122,11 @@ ${diff.slice(0, 3500)}
                 'Content-Type': 'application/json',
             },
         });
-        const review = res.data.choices[0].message.content;
+        return res.data.choices[0].message.content;
+    });
+}
+function postReviewComment(token, repo, prNumber, review) {
+    return __awaiter(this, void 0, void 0, function* () {
         const octokit = github.getOctokit(token);
         yield octokit.rest.issues.createComment({
             owner: repo.owner,
@@ -136,24 +134,49 @@ ${diff.slice(0, 3500)}
             issue_number: prNumber,
             body: `💬 **AI Review Bot** says:\n\n${review}`,
         });
-        console.log('レビュー投稿完了');
-    }
-    catch (err) {
-        if (axios_1.default.isAxiosError(err)) {
-            core.error(`Axiosエラー: ${err.message}`);
-            if (err.response) {
-                core.error(`status: ${err.response.status}`);
-                core.error(`statusText: ${err.response.statusText}`);
-                core.error(`response data: ${JSON.stringify(err.response.data)}`);
-                core.error(`response headers: ${JSON.stringify(err.response.headers)}`);
-            }
-            core.error(`config: ${JSON.stringify(err.config)}`);
-            core.error(`stack: ${err.stack}`);
+    });
+}
+function handleError(err) {
+    if (axios_1.default.isAxiosError(err)) {
+        core.error(`Axiosエラー: ${err.message}`);
+        if (err.response) {
+            core.error(`status: ${err.response.status}`);
+            core.error(`statusText: ${err.response.statusText}`);
+            core.error(`response data: ${JSON.stringify(err.response.data)}`);
+            core.error(`response headers: ${JSON.stringify(err.response.headers)}`);
         }
-        else {
-            core.error(`一般エラー: ${err.message}`);
-            core.error(`stack: ${err.stack}`);
-        }
-        core.setFailed(`エラー: ${err.message}`);
+        core.error(`config: ${JSON.stringify(err.config)}`);
+        core.error(`stack: ${err.stack}`);
     }
-}))();
+    else {
+        core.error(`一般エラー: ${err.message}`);
+        core.error(`stack: ${err.stack}`);
+    }
+    core.setFailed(`エラー: ${err.message}`);
+}
+function main() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const openaiKey = core.getInput('openai_api_key');
+            if (!openaiKey)
+                throw new Error('OpenAI APIキーが設定されていません');
+            const token = process.env.GITHUB_TOKEN;
+            if (!token)
+                throw new Error('GITHUB_TOKENが設定されていません');
+            const repo = github.context.repo;
+            const prNumber = getPrNumber(github.context);
+            const diff = getDiff(prNumber, repo);
+            const promptFile = core.getInput('prompt_file');
+            const reviewPrompt = getReviewPrompt(promptFile);
+            const prompt = createOpenAIPrompt(reviewPrompt, diff);
+            setupAxiosRetry();
+            const review = yield requestOpenAIReview(openaiKey, prompt);
+            yield postReviewComment(token, repo, prNumber, review);
+            console.log('レビュー投稿完了');
+        }
+        catch (err) {
+            handleError(err);
+        }
+    });
+}
+main();
