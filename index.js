@@ -25,7 +25,9 @@ const path = require('path');
 
     if (!prNumber) throw new Error('プルリクエスト番号が取得できません');
 
-    const diff = exec(`gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`).toString();
+    const diff = exec(
+      `gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`,
+    ).toString();
 
     // プロンプトファイルの読み込み
     const promptFile = core.getInput('prompt_file');
@@ -89,7 +91,7 @@ ${diff.slice(0, 3500)}
           Authorization: `Bearer ${openaiKey}`,
           'Content-Type': 'application/json',
         },
-      }
+      },
     );
 
     const review = res.data.choices[0].message.content;
