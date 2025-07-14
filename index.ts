@@ -7,6 +7,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 function getPrNumber(context: typeof github.context): number {
+  console.info(context.payload);
+
   if (context.payload.pull_request) {
     return context.payload.pull_request.number;
   } else if (
@@ -19,9 +21,22 @@ function getPrNumber(context: typeof github.context): number {
   throw new Error('プルリクエスト番号が取得できません');
 }
 
+function getIgnorePatterns(ignoreFilePath: string = '.aicodereviewignore'): string[] {
+  const absPath = path.resolve(ignoreFilePath);
+  if (!fs.existsSync(absPath)) return [];
+  return fs
+    .readFileSync(absPath, 'utf8')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
+}
+
 function getDiff(prNumber: number, repo: { owner: string; repo: string }): string {
+  const ignorePatterns = getIgnorePatterns();
+  const excludeArgs = ignorePatterns.map((pattern) => `--exclude ${pattern}`).join(' ');
   return execSync(
-    `gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`,
+    `gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never ${excludeArgs}`,
+    { maxBuffer: 10 * 1024 * 1024 },
   ).toString();
 }
 
@@ -103,7 +118,7 @@ async function postReviewComment(
   });
 }
 
-function handleError(err: any) {
+function handleError(err: unknown) {
   if (axios.isAxiosError(err)) {
     core.error(`Axiosエラー: ${err.message}`);
     if (err.response) {
@@ -114,11 +129,13 @@ function handleError(err: any) {
     }
     core.error(`config: ${JSON.stringify(err.config)}`);
     core.error(`stack: ${err.stack}`);
-  } else {
+  } else if (err instanceof Error) {
     core.error(`一般エラー: ${err.message}`);
     core.error(`stack: ${err.stack}`);
+  } else {
+    core.error(`未知のエラー: ${JSON.stringify(err)}`);
   }
-  core.setFailed(`エラー: ${err.message}`);
+  core.setFailed(`エラー: ${err instanceof Error ? err.message : String(err)}`);
 }
 
 async function main() {
@@ -137,7 +154,7 @@ async function main() {
     const review = await requestOpenAIReview(openaiKey, prompt);
     await postReviewComment(token, repo, prNumber, review);
     console.log('レビュー投稿完了');
-  } catch (err: any) {
+  } catch (err: unknown) {
     handleError(err);
   }
 }

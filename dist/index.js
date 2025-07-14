@@ -53,6 +53,7 @@ const child_process_1 = require("child_process");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 function getPrNumber(context) {
+    console.info(context.payload);
     if (context.payload.pull_request) {
         return context.payload.pull_request.number;
     }
@@ -63,8 +64,20 @@ function getPrNumber(context) {
     }
     throw new Error('プルリクエスト番号が取得できません');
 }
+function getIgnorePatterns(ignoreFilePath = '.aicodereviewignore') {
+    const absPath = path.resolve(ignoreFilePath);
+    if (!fs.existsSync(absPath))
+        return [];
+    return fs
+        .readFileSync(absPath, 'utf8')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith('#'));
+}
 function getDiff(prNumber, repo) {
-    return (0, child_process_1.execSync)(`gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`).toString();
+    const ignorePatterns = getIgnorePatterns();
+    const excludeArgs = ignorePatterns.map((pattern) => `--exclude ${pattern}`).join(' ');
+    return (0, child_process_1.execSync)(`gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never ${excludeArgs}`, { maxBuffer: 10 * 1024 * 1024 }).toString();
 }
 function getReviewPrompt(promptFile) {
     if (promptFile) {
@@ -148,11 +161,14 @@ function handleError(err) {
         core.error(`config: ${JSON.stringify(err.config)}`);
         core.error(`stack: ${err.stack}`);
     }
-    else {
+    else if (err instanceof Error) {
         core.error(`一般エラー: ${err.message}`);
         core.error(`stack: ${err.stack}`);
     }
-    core.setFailed(`エラー: ${err.message}`);
+    else {
+        core.error(`未知のエラー: ${JSON.stringify(err)}`);
+    }
+    core.setFailed(`エラー: ${err instanceof Error ? err.message : String(err)}`);
 }
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
