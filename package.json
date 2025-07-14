@@ -23,6 +23,6 @@
     "format": "prettier --write .",
     "lint": "eslint . --ext .ts,.js",
     "lint:fix": "eslint . --ext .ts,.js --fix",
-    "build": "ncc build index.js -o dist"
+    "build": "tsc"
   }
 }

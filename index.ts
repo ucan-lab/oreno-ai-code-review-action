@@ -1,15 +1,16 @@
-const core = require('@actions/core');
-const github = require('@actions/github');
-const axios = require('axios');
-const axiosRetry = require('axios-retry').default;
-const exec = require('child_process').execSync;
-const fs = require('fs');
-const path = require('path');
+import * as core from '@actions/core';
+import * as github from '@actions/github';
+import axios, { AxiosError } from 'axios';
+import axiosRetry from 'axios-retry';
+import { execSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 
 (async () => {
   try {
-    const openaiKey = core.getInput('openai_api_key');
-    const token = process.env.GITHUB_TOKEN;
+    const openaiKey: string = core.getInput('openai_api_key');
+    const token: string | undefined = process.env.GITHUB_TOKEN;
+    if (!token) throw new Error('GITHUB_TOKENが設定されていません');
     const repo = github.context.repo;
     let prNumber;
 
@@ -25,13 +26,13 @@ const path = require('path');
 
     if (!prNumber) throw new Error('プルリクエスト番号が取得できません');
 
-    const diff = exec(
+    const diff: string = execSync(
       `gh pr diff ${prNumber} --repo ${repo.owner}/${repo.repo} --color never`,
     ).toString();
 
     // プロンプトファイルの読み込み
-    const promptFile = core.getInput('prompt_file');
-    let reviewPrompt;
+    const promptFile: string = core.getInput('prompt_file');
+    let reviewPrompt: string;
     if (promptFile) {
       const promptPath = path.resolve(promptFile);
       console.info(`指定されたプロンプトファイル: ${promptPath}`);
@@ -58,13 +59,12 @@ ${diff.slice(0, 3500)}
 
     axiosRetry(axios, {
       retries: 5,
-      retryCondition: (error) => {
-        return error.response && error.response.status === 429;
+      retryCondition: (error: AxiosError) => {
+        return !!(error.response && error.response.status === 429);
       },
-      retryDelay: (retryCount, error) => {
+      retryDelay: (retryCount, error: AxiosError) => {
         const retryAfter = error.response && error.response.headers['retry-after'];
         if (retryAfter) {
-          // retry-afterが秒数の場合と日付の場合がある
           const delay = Number(retryAfter);
           if (!isNaN(delay)) {
             return delay * 1000;
@@ -74,7 +74,6 @@ ${diff.slice(0, 3500)}
             return Math.max(date.getTime() - now.getTime(), 1000);
           }
         }
-        // デフォルトは指数バックオフ
         return axiosRetry.exponentialDelay(retryCount);
       },
     });
@@ -94,7 +93,7 @@ ${diff.slice(0, 3500)}
       },
     );
 
-    const review = res.data.choices[0].message.content;
+    const review: string = res.data.choices[0].message.content;
 
     const octokit = github.getOctokit(token);
     await octokit.rest.issues.createComment({
@@ -105,8 +104,8 @@ ${diff.slice(0, 3500)}
     });
 
     console.log('レビュー投稿完了');
-  } catch (err) {
-    if (err.isAxiosError) {
+  } catch (err: any) {
+    if (axios.isAxiosError(err)) {
       core.error(`Axiosエラー: ${err.message}`);
       if (err.response) {
         core.error(`status: ${err.response.status}`);

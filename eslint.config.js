@@ -20,6 +20,10 @@ module.exports = [
         ecmaVersion: 'latest',
         sourceType: 'module',
       },
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+      },
     },
     plugins: {
       '@typescript-eslint': ts,
@@ -28,6 +32,7 @@ module.exports = [
     rules: {
       ...ts.configs['recommended'].rules,
       'prettier/prettier': 'error',
+      '@typescript-eslint/no-explicit-any': 'warn',
     },
   },
 ];
