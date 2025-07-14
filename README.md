@@ -6,7 +6,7 @@
 name: PR AI Review
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened]
 permissions:
   contents: read
   issues: write
@@ -22,6 +22,20 @@ jobs:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+`.github/workflows/ai-re-review.yml`
+
+```
+name: PR AI Re Review
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+jobs:
   re_review:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '/re-review')
     runs-on: ubuntu-latest
